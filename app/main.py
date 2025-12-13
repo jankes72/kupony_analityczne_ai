@@ -204,7 +204,24 @@ async def fetch_and_store_season(payload: FetchSeasonRequest):
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ApiSportsError as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+        msg = str(e)
+
+        # auth problems
+        if "HTTP 401" in msg or "Unauthorized" in msg or "invalid" in msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"External API auth error: {msg}"
+            )
+
+        # plan limits / forbidden seasons etc.
+        if "Free plans do not have access" in msg or "'plan'" in msg or "plan" in msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Plan limit: {msg}"
+            )
+
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=msg)
+
 
 
 @app.post("/build-dataset")
