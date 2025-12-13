@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from datetime import datetime
 import psutil
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+from fastapi.responses import FileResponse
 
 from .sport_wrapper import ApiSportsHockey, ApiSportsError
 
@@ -55,6 +56,21 @@ class SportsContract(BaseModel):
 class CollectRequest(BaseModel):
     # special key in contract that contains wrapper config and params
     sports: SportsContract
+
+class FetchSeasonRequest(BaseModel):
+    api_key: str
+    league: int
+    season: int
+    db_path: Optional[str] = None
+
+
+class BuildDatasetRequest(BaseModel):
+    league: int
+    season: int
+    db_path: Optional[str] = None
+    output_path: Optional[str] = None
+    return_file: bool = False  # jak True -> zwróci plik Parquet
+
 
 @app.get("/")
 async def root():
@@ -125,65 +141,92 @@ async def get_settings():
     }
 
 
-    @app.post("/collect-world-data")
-    async def collect_world_data(payload: CollectRequest):
-        sc = payload.sports
+@app.post("/collect-world-data")
+async def collect_world_data(payload: CollectRequest):
+    sc = payload.sports
 
-        """🌐 Endpoint integrujący ApiSportsHockey
+    """🌐 Endpoint integrujący ApiSportsHockey
 
-        Kontrakt (JSON):
-        {
-            "sports": {
-                "api_key": "API_KEY_HERE",
-                "action": "leagues|games|game|games_events|team_statistics",
-                "params": { ... }  # zależnie od akcji
-            }
+    Kontrakt (JSON):
+    {
+        "sports": {
+            "api_key": "API_KEY_HERE",
+            "action": "leagues|games|game|games_events|team_statistics",
+            "params": { ... }
         }
+    }
+    """
+    # init wrapper (will raise ValueError when api_key is missing/empty)
+    try:
+        api = ApiSportsHockey(api_key=sc.api_key, rate_limit_sleep=0.15)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
-        Obsługa błędów:
-        - brak/niepoprawny `api_key` -> 401
-        - nieznana akcja lub brak wymaganych parametrów -> 400
-        - błąd zewnętrznego API -> 502 (lub 401 jeśli problem z autoryzacją)
+    action = sc.action
+    params = sc.params or {}
 
-        Przykłady akcji i wymagane parametry:
-        - `leagues`: params: `season`, `search` ✅
-        - `games`: params: `league`+`season` albo `date` ✅
-        - `game`: params: `game_id` lub `id` ✅
-        - `games_events`: params: `game` (id) ✅
-        - `team_statistics`: params: `league`, `season`, `team` ✅
-        """
-        # init wrapper (will raise ValueError when api_key is missing/empty)
-        try:
-            api = ApiSportsHockey(api_key=sc.api_key, rate_limit_sleep=0.15)
-        except ValueError as e:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    try:
+        if action == "leagues":
+            result = api.leagues(**params)
+        elif action == "games":
+            result = api.games(**params)
+        elif action == "game":
+            game_id = params.get("game_id") or params.get("id")
+            if not game_id:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing game_id/id in params")
+            result = api.game(int(game_id))
+        elif action == "games_events":
+            game = params.get("game") or params.get("game_id") or params.get("id")
+            if not game:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing game in params")
+            result = api.games_events(game=int(game))
+        elif action == "team_statistics":
+            result = api.team_statistics(**params)
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown action: {action}")
+    except ApiSportsError as e:
+        msg = str(e)
+        if "HTTP 401" in msg or "401" in msg or "Unauthorized" in msg or "invalid" in msg.lower():
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"External API auth error: {msg}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=msg)
 
-        action = sc.action
-        params = sc.params or {}
+    return {"result": result}
 
-        try:
-            if action == "leagues":
-                result = api.leagues(**params)
-            elif action == "games":
-                result = api.games(**params)
-            elif action == "game":
-                game_id = params.get("game_id") or params.get("id")
-                if not game_id:
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing game_id/id in params")
-                result = api.game(int(game_id))
-            elif action == "games_events":
-                game = params.get("game") or params.get("game_id") or params.get("id")
-                if not game:
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing game in params")
-                result = api.games_events(game=int(game))
-            elif action == "team_statistics":
-                result = api.team_statistics(**params)
-            else:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown action: {action}")
-        except ApiSportsError as e:
-            msg = str(e)
-            if "HTTP 401" in msg or "401" in msg or "Unauthorized" in msg or "invalid" in msg.lower():
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"External API auth error: {msg}")
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=msg)
+@app.post("/fetch-and-store-season")
+async def fetch_and_store_season(payload: FetchSeasonRequest):
+    """
+    Zasysa wszystkie mecze dla (league, season) i zapisuje do SQLite.
+    """
+    try:
+        api = ApiSportsHockey(api_key=payload.api_key, rate_limit_sleep=0.15, db_path=payload.db_path)
+        summary = api.fetch_and_store_season(league=payload.league, season=payload.season)
+        return {"ok": True, "summary": summary}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ApiSportsError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
-        return {"result": result}
+
+@app.post("/build-dataset")
+async def build_dataset(payload: BuildDatasetRequest):
+    """
+    Buduje dataset z DB i zapisuje Parquet.
+    """
+    try:
+        api = ApiSportsHockey(api_key="DUMMY_KEY_NOT_USED_FOR_DATASET", rate_limit_sleep=0.0, db_path=payload.db_path)
+        out_path = api.build_dataset(league=payload.league, season=payload.season, output_path=payload.output_path)
+
+        if payload.return_file:
+            # zwróć gotowy plik do pobrania
+            return FileResponse(
+                path=out_path,
+                media_type="application/octet-stream",
+                filename=os.path.basename(out_path),
+            )
+
+        return {"ok": True, "parquet_path": out_path}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
