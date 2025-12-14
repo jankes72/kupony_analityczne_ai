@@ -2,20 +2,31 @@
 
 ## Opis projektu
 
-Projekt jest eksperymentem oraz jednocześnie badaniem różnych struktur sieci neuronowych do predykcji i analizy danych predykcji i dynamicznego uczenia się na własnych błędach w czasie rzeczywistym.
+Projekt to eksperyment badawczy nad modelami predykcyjnymi dla zdarzeń sportowych zintegrowanymi z
+instalacją danych i API. System łączy:
+
+- eksperymenty z różnymi architekturami sieci neuronowych do predykcji wyników,
+- moduł integrujący z zewnętrznym API (API-Sports) do zbierania danych meczowych (`app/sport_wrapper.py`),
+- warstwę przechowywania i transformacji danych (SQLite -> Parquet) oraz narzędzia do feature engineering,
+- serwer HTTP oparty na FastAPI z endpointami do monitoringu, pobierania danych, budowania datasetów i testów.
+
+Całość pozwala na: zasysanie danych, tworzenie feature'ów, budowę datasetów Parquet i szybką ocenę modeli.
 
 ## Charakterystyka
 
-- 🧠 Eksperymenty z różnymi architekturami sieci neuronowych
-- 📊 Analiza i predykcja danych w czasie rzeczywistym
-- 🔄 Dynamiczne uczenie się na własnych błędach
-- ⚡ API FastAPI z monitoringiem i statystykami
-- 🔍 Endpoints do analizy i monitorowania systemu
+- 🧭 Integracja z API-Sports (wrapper `ApiSportsHockey`) — pobieranie lig, meczów, eventów, standings,
+- 🗄️ Lokalna baza SQLite do przechowywania zasysanych meczów (`hockey.sqlite`),
+- 📦 Eksport datasetów do Parquet z gotowymi cechami (`nhl_2023.parquet` przykładowy plik),
+- ⚡ FastAPI z endpointami: zdrowie, statystyki, monitoring systemu, endpointy operacyjne (`collect-world-data`, `fetch-and-store-season`, `build-dataset`),
+- 🧩 Helpery do feature-engineering (`app/features_helpers.py`) — budowa targetów, normalizacja kursów, cechy formy i H2H,
+- 🛠️ CLI w `app/sport_wrapper.py` do szybkich testów (pobieranie lig, fetch, budowa datasetu),
+- 📚 Interaktywna dokumentacja OpenAPI dostępna pod `/docs` i `/redoc`.
 
 ## Wymagania
 
 - Python 3.8+
 - pip
+- Zależności w `requirements.txt` (FastAPI, Uvicorn, pandas, requests, psutil, pydantic, itp.).
 
 ## Instalacja
 
@@ -36,20 +47,26 @@ pip install -r requirements.txt
 python run.py
 ```
 
-Serwer uruchomi się na `http://localhost:8000`
+Serwer uruchomi się na `http://localhost:8000`.
 
-## API Endpoints
+## API Endpoints (szybki przegląd)
 
-- `GET /` - Informacje o API
-- `GET /health` - Status zdrowia aplikacji
-- `GET /stats` - Statystyki (requesty, sesje, czas odpowiedzi)
-- `GET /monitor` - Monitorowanie zasobów (CPU, pamięć, uptime)
-- `GET /settings` - Ustawienia aplikacji
+- `GET /` — informacje o API i lista endpointów
+- `GET /health` — health-check
+- `GET /stats` — przykładowe statystyki aplikacji
+- `GET /monitor` — metryki systemowe (CPU, pamięć, uptime)
+- `GET /settings` — zwraca statyczne ustawienia
+- `POST /collect-world-data` — uniwersalny proxy do `ApiSportsHockey`
+- `POST /fetch-and-store-season` — zasysa mecze dla podanego `league`+`season` i zapisuje do SQLite
+- `POST /build-dataset` — buduje dataset Parquet z danych w SQLite (feature engineering)
+
+Szczegółowe kontrakty request/response znajdują się niżej oraz w automatycznie wygenerowanej dokumentacji OpenAPI.
 
 ## Kontrakty endpointów (request / response)
 
-- `POST /collect-world-data` — uniwersalny endpoint do wywołań wrappera `ApiSportsHockey`.
-	- Request JSON (przykład):
+### POST /collect-world-data
+
+Request JSON (przykład):
 
 ```json
 {
@@ -61,7 +78,7 @@ Serwer uruchomi się na `http://localhost:8000`
 }
 ```
 
-	- Response (przykład, zależy od akcji):
+Response (przykład, zależy od akcji):
 
 ```json
 {
@@ -69,19 +86,20 @@ Serwer uruchomi się na `http://localhost:8000`
 }
 ```
 
-- `POST /fetch-and-store-season` — pobiera mecze z API i zapisuje do SQLite.
-	- Request JSON:
+### POST /fetch-and-store-season
+
+Request JSON:
 
 ```json
 {
 	"api_key": "API_SPORTS_KEY",
 	"league": 57,
 	"season": 2024,
-	"db_path": "./hockey.sqlite"        
+	"db_path": "./hockey.sqlite"
 }
 ```
 
-	- Response (przykład):
+Response (przykład):
 
 ```json
 {
@@ -95,8 +113,9 @@ Serwer uruchomi się na `http://localhost:8000`
 }
 ```
 
-- `POST /build-dataset` — buduje dataset (feature engineering) z DB i zapisuje Parquet.
-	- Request JSON:
+### POST /build-dataset
+
+Request JSON:
 
 ```json
 {
@@ -108,9 +127,9 @@ Serwer uruchomi się na `http://localhost:8000`
 }
 ```
 
-	- Response (przykłady):
+Response (przykłady):
 
-		- Gdy `return_file` = `false`:
+- Gdy `return_file` = `false`:
 
 ```json
 {
@@ -119,18 +138,9 @@ Serwer uruchomi się na `http://localhost:8000`
 }
 ```
 
-		- Gdy `return_file` = `true` — endpoint zwraca plik Parquet jako download (`Content-Disposition`):
-			bez JSON, bezpośrednio plik binarny.
+- Gdy `return_file` = `true` — endpoint zwraca plik Parquet jako download (`Content-Disposition`).
 
-Uwagi:
-- Wszystkie POSTy zwracają odpowiednie kody HTTP w przypadku błędów (400/401/403/500) wraz z polem `detail` w treści odpowiedzi.
-- Interaktywna specyfikacja (openapi) dostępna jest pod `/docs` i `/redoc` — tam znajdziesz dokładne schematy Pydantic.
-
-## Dokumentacja API
-
-Interaktywna dokumentacja dostępna jest na:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+Uwagi: w przypadku błędów endpointy zwracają odpowiednie kody HTTP i pole `detail` z opisem.
 
 ## Struktura projektu
 
@@ -138,11 +148,15 @@ Interaktywna dokumentacja dostępna jest na:
 kupony_analityczne_ai/
 ├── app/
 │   ├── __init__.py
-│   └── main.py          # Główna aplikacja FastAPI
-├── run.py               # Entry point
-├── requirements.txt     # Zależności
-├── .env.example        # Przykład zmiennych środowiskowych
-└── README.md           # Ten plik
+│   ├── main.py              # Główna aplikacja FastAPI (endpointy i modele Pydantic)
+│   ├── sport_wrapper.py     # Wrapper ApiSportsHockey, DB helpers, dataset builder i CLI
++│   ├── features_helpers.py  # Feature engineering helpers i GameRow dataclass
++│   └── README.md            # Dokumentacja modułów wewnątrz `app/`
+├── run.py                   # Entry point uruchamiający Uvicorn
+├── requirements.txt         # Zależności
+├── .env.example             # Przykład zmiennych środowiskowych
+├── hockey.sqlite            # (opcjonalnie) przykładowa baza danych SQLite
+└── nhl_2023.parquet         # (opcjonalnie) przykładowy dataset Parquet
 ```
 
 ## Zmienne środowiskowe
