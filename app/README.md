@@ -1,6 +1,7 @@
 # app — moduły i szybka nawigacja
 
-Ten plik opisuje moduły znajdujące się w katalogu `app/` oraz ich najważniejsze klasy, funkcje i przykłady użycia, żeby łatwiej poruszać się po kodzie.
+Ten plik opisuje moduły znajdujące się w katalogu `app/`. Zawiera zwięzłe streszczenia każdego modułu (`*.py`) wraz z opisem najważniejszych klas, funkcji i interfejsów oraz przykładowymi poleceniami uruchomieniowymi. Materiał ma na celu
+przyspieszyć orientację w kodzie — szybko znaleźć punkty wejścia (np. API, wrapper do API-Sports, helpery do feature engineering), zrozumieć wzajemne zależności między modułami oraz zobaczyć typowe scenariusze użycia i testowania.
 
 - `app/__init__.py` — moduł inicjalizacyjny (pusty).
 
@@ -95,7 +96,3 @@ python -m app.sport_wrapper --dataset --league 57 --season 2024 --db ./hockey.sq
 
 ---
 
-Jeśli chcesz, mogę:
-- dodać docstringi/komentarze w konkretnych funkcjach,
-- zautomatyzować testy jednostkowe dla kluczowych funkcji,
-- albo od razu zatwierdzić (`git add`/`commit`/`push`) nowy `app/README.md` do repo — daj znać, czy chcesz, żebym to zrobił automatycznie.
