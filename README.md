@@ -46,6 +46,86 @@ Serwer uruchomi się na `http://localhost:8000`
 - `GET /monitor` - Monitorowanie zasobów (CPU, pamięć, uptime)
 - `GET /settings` - Ustawienia aplikacji
 
+## Kontrakty endpointów (request / response)
+
+- `POST /collect-world-data` — uniwersalny endpoint do wywołań wrappera `ApiSportsHockey`.
+	- Request JSON (przykład):
+
+```json
+{
+	"sports": {
+		"api_key": "API_SPORTS_KEY",
+		"action": "leagues|games|game|games_events|team_statistics",
+		"params": { "league": 57, "season": 2024 }
+	}
+}
+```
+
+	- Response (przykład, zależy od akcji):
+
+```json
+{
+	"result": [ /* array lub obiekt zwrócony przez ApiSports */ ]
+}
+```
+
+- `POST /fetch-and-store-season` — pobiera mecze z API i zapisuje do SQLite.
+	- Request JSON:
+
+```json
+{
+	"api_key": "API_SPORTS_KEY",
+	"league": 57,
+	"season": 2024,
+	"db_path": "./hockey.sqlite"        
+}
+```
+
+	- Response (przykład):
+
+```json
+{
+	"ok": true,
+	"summary": {
+		"league": 57,
+		"season": 2024,
+		"fetched": 123,
+		"db_path": "./hockey.sqlite"
+	}
+}
+```
+
+- `POST /build-dataset` — buduje dataset (feature engineering) z DB i zapisuje Parquet.
+	- Request JSON:
+
+```json
+{
+	"league": 57,
+	"season": 2024,
+	"db_path": "./hockey.sqlite",
+	"output_path": "./nhl_2024.parquet",
+	"return_file": false
+}
+```
+
+	- Response (przykłady):
+
+		- Gdy `return_file` = `false`:
+
+```json
+{
+	"ok": true,
+	"parquet_path": "dataset_hockey_league57_season2024.parquet"
+}
+```
+
+		- Gdy `return_file` = `true` — endpoint zwraca plik Parquet jako download (`Content-Disposition`):
+			bez JSON, bezpośrednio plik binarny.
+
+Uwagi:
+- Wszystkie POSTy zwracają odpowiednie kody HTTP w przypadku błędów (400/401/403/500) wraz z polem `detail` w treści odpowiedzi.
+- Interaktywna specyfikacja (openapi) dostępna jest pod `/docs` i `/redoc` — tam znajdziesz dokładne schematy Pydantic.
+
 ## Dokumentacja API
 
 Interaktywna dokumentacja dostępna jest na:
