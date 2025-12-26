@@ -216,6 +216,30 @@ HOST=0.0.0.0
 PORT=8000
 ```
 
+## API-Sports — rejestracja i API key
+
+Aby pobierać dane z API-Sports potrzebujesz klucza API. Krótkie kroki:
+
+1. Wejdź na stronę: https://www.api-sports.io i zarejestruj konto (prostą rejestrację możesz wykonać przez e-mail).
+2. Po zalogowaniu przejdź do panelu (Dashboard) — tam znajdziesz swój *API key*.
+3. Skopiuj klucz i ustaw go w swoim środowisku, np. w pliku `.env`:
+
+```
+API_SPORTS_KEY=twój_api_key_tutaj
+```
+
+4. W kodzie przekazuj klucz do wrappera lub wysyłaj w nagłówkach żądań:
+
+```python
+# przykład prostego nagłówka
+headers = {"x-apisports-key": "TWÓJ_API_KEY"}
+```
+
+Uwaga:
+- Sprawdź plan/subskrypcję w panelu API-Sports — różne plany mają różne limity zapytań i dostępność danych.
+- Trzymaj klucz prywatny (nie commituj go do repo). Używaj `.env` lub menedżera sekretów.
+
+
 ## Licencja
 
 MIT
