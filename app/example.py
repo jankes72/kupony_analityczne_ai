@@ -143,7 +143,7 @@ def build_tf_model(input_dim: int, n_classes: int = 1):
 
 
 def train_tf_model(X_tensor, y_tensor, epochs: int = 5, batch_size: int = 32, save_path: Optional[str] = None):
-    import tensorflow as tf
+    import tensorflow as tf #type: ignore
 
     # wykryj czy binarny czy wieloklasowy
     y_np = y_tensor.numpy() if hasattr(y_tensor, "numpy") else None
