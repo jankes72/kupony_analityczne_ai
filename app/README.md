@@ -96,3 +96,18 @@ python -m app.sport_wrapper --dataset --league 57 --season 2024 --db ./hockey.sq
 
 ---
 
+Uaktualnienia (syntetyczny generator i przykłady)
+
+- `app/generator_synthetic_data.py` — nowy moduł generujący warianty syntetyczne rekordów meczowych (hokej).
+  Można go włączyć w pipeline `/build-dataset` aby dopisać do każdego rekordu warianty syntetyczne
+  (oryginał + warianty). Uważaj na zwiększenie rozmiaru datasetu.
+
+- `app/example.py` — helpery do przygotowania danych do treningu (DF -> tensory), proste funkcje
+  treningowe dla TensorFlow i PyTorch oraz demo, które tworzy `models/` z przykładowymi zapisami modeli.
+
+- `app/main.py` — endpoint `/build-dataset` zintegrowany z generatorem syntetycznym; domyślnie tworzy
+  finalny Parquet zawierający oryginały i wygenerowane warianty.
+
+Jeśli chcesz, mogę zaktualizować ten plik dalej — np. dodać przykładowe CLI do uruchamiania augmentacji
+albo fragment z przykładowymi parametrami generatora.
+
