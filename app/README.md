@@ -108,6 +108,5 @@ Uaktualnienia (syntetyczny generator i przykłady)
 - `app/main.py` — endpoint `/build-dataset` zintegrowany z generatorem syntetycznym; domyślnie tworzy
   finalny Parquet zawierający oryginały i wygenerowane warianty.
 
-Jeśli chcesz, mogę zaktualizować ten plik dalej — np. dodać przykładowe CLI do uruchamiania augmentacji
-albo fragment z przykładowymi parametrami generatora.
+
 
