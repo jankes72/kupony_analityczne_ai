@@ -244,7 +244,7 @@ async def build_dataset(payload: BuildDatasetRequest):
     try:
         # potrzebujemy pandas do operacji na DF / Parquet
         try:
-            import pandas as pd
+            import pandas as pd #type: ignore
         except Exception:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                                 detail="Missing dependency: pandas. Install with 'pip install pandas pyarrow' to enable Parquet export.")
