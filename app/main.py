@@ -7,7 +7,9 @@ import os
 from typing import Any, Dict, Optional
 from fastapi.responses import FileResponse
 
-from .sport_wrapper import ApiSportsHockey, ApiSportsError
+from .generator_synthetic_data import SyntheticMatchGeneratorV2
+import tempfile
+import json
 
 app = FastAPI(
     title="Kupony Analityczne AI",
@@ -158,6 +160,11 @@ async def collect_world_data(payload: CollectRequest):
     """
     # init wrapper (will raise ValueError when api_key is missing/empty)
     try:
+        from .sport_wrapper import ApiSportsHockey, ApiSportsError
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Missing or broken sport_wrapper module")
+
+    try:
         api = ApiSportsHockey(api_key=sc.api_key, rate_limit_sleep=0.15)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
@@ -198,6 +205,11 @@ async def fetch_and_store_season(payload: FetchSeasonRequest):
     Zasysa wszystkie mecze dla (league, season) i zapisuje do SQLite.
     """
     try:
+        from .sport_wrapper import ApiSportsHockey, ApiSportsError
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Missing or broken sport_wrapper module")
+
+    try:
         api = ApiSportsHockey(api_key=payload.api_key, rate_limit_sleep=0.15, db_path=payload.db_path)
         summary = api.fetch_and_store_season(league=payload.league, season=payload.season)
         return {"ok": True, "summary": summary}
@@ -230,18 +242,95 @@ async def build_dataset(payload: BuildDatasetRequest):
     Buduje dataset z DB i zapisuje Parquet.
     """
     try:
+        # potrzebujemy pandas do operacji na DF / Parquet
+        try:
+            import pandas as pd
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                detail="Missing dependency: pandas. Install with 'pip install pandas pyarrow' to enable Parquet export.")
+
+        # wczytaj/zbuduj dataset z DB przy użyciu ApiSportsHockey
+        try:
+            from .sport_wrapper import ApiSportsHockey
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Missing or broken sport_wrapper module")
+
+        if not payload.db_path:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="`db_path` is required to build dataset from DB")
+
         api = ApiSportsHockey(api_key="DUMMY_KEY_NOT_USED_FOR_DATASET", rate_limit_sleep=0.0, db_path=payload.db_path)
-        out_path = api.build_dataset(league=payload.league, season=payload.season, output_path=payload.output_path)
+
+        # najpierw stwórz bazowy parquet z DB do tymczasowej ścieżki
+        fd, tmp_base = tempfile.mkstemp(suffix=".parquet")
+        os.close(fd)
+        try:
+            base_path = api.build_dataset(league=payload.league, season=payload.season, output_path=tmp_base)
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to build base dataset: {e}")
+
+        # wczytaj dataframe z DB
+        try:
+            base_df = pd.read_parquet(base_path)
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Can't read base parquet: {e}")
+
+        augmented = []
+
+        def _to_base_record(row: dict) -> dict:
+            # mapujemy dostępne pola do schematu generatora, z bezpiecznymi defaultami
+            return {
+                "league": row.get("league", "DB League"),
+                "season": str(row.get("season", payload.season)),
+                "home_team": row.get("home_team") or f"team_{row.get('home_team_id', '')}",
+                "away_team": row.get("away_team") or f"team_{row.get('away_team_id', '')}",
+                "closing_odds": {"home": row.get("closing_odds_home", 2.0), "draw": row.get("closing_odds_draw", 10.0), "away": row.get("closing_odds_away", 3.0)},
+                "final_result": row.get("final_result", "draw"),
+                "form_home": float(row.get("form_home", 0.6)),
+                "form_away": float(row.get("form_away", 0.6)),
+                "sentiment": float(row.get("sentiment", 0.5)),
+                "faceoff_win_home": int(row.get("faceoff_win_home", 50)),
+                "shots_home": int(row.get("shots_home", max(0, int(row.get("shots_home", 25))))),
+                "shots_away": int(row.get("shots_away", max(0, int(row.get("shots_away", 25))))),
+                "powerplays_home": int(row.get("powerplays_home", 0)),
+                "powerplays_away": int(row.get("powerplays_away", 0)),
+                "penalty_minutes_home": int(row.get("penalty_minutes_home", 0)),
+                "penalty_minutes_away": int(row.get("penalty_minutes_away", 0)),
+                "goalie_sv_pct_home": float(row.get("goalie_sv_pct_home", 0.91)),
+                "goalie_sv_pct_away": float(row.get("goalie_sv_pct_away", 0.91)),
+                "injuries_home": int(row.get("injuries_home", 0)),
+                "injuries_away": int(row.get("injuries_away", 0)),
+            }
+
+        records = base_df.to_dict(orient="records")
+
+        for rec in records:
+            # dodajemy oryginalny rekord jako pierwszy
+            augmented.append(rec)
+
+            base = _to_base_record(rec)
+            gen = SyntheticMatchGeneratorV2(base)
+            synths = gen.generate()
+            augmented.extend(synths)
+
+        out_df = pd.DataFrame(augmented)
+
+        # zapisz wynikowy parquet
+        if payload.output_path:
+            out_path = payload.output_path
+        else:
+            fd, tmp_out = tempfile.mkstemp(suffix=".parquet")
+            os.close(fd)
+            out_path = tmp_out
+
+        try:
+            out_df.to_parquet(out_path, index=False)
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to write output parquet: {e}")
 
         if payload.return_file:
-            # zwróć gotowy plik do pobrania
-            return FileResponse(
-                path=out_path,
-                media_type="application/octet-stream",
-                filename=os.path.basename(out_path),
-            )
+            return FileResponse(path=out_path, media_type="application/octet-stream", filename=os.path.basename(out_path))
 
-        return {"ok": True, "parquet_path": out_path}
+        return {"ok": True, "parquet_path": out_path, "base_rows": len(records), "rows": len(out_df)}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
