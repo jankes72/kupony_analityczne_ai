@@ -159,6 +159,42 @@ kupony_analityczne_ai/
 └── nhl_2023.parquet         # (opcjonalnie) przykładowy dataset Parquet
 ```
 
+## Dataflow (end-to-end)
+
+Poniżej opis kroków przetwarzania danych i przepływu od pobrania surowych zdarzeń do wytrenowanego modelu:
+
+1. Pobranie danych z API
+	- `app/sport_wrapper.py` (klasa `ApiSportsHockey`) łączy się z API-Sports i pobiera mecze, eventy, statystyki.
+	- Dane są zapisywane do lokalnej bazy SQLite (`hockey.sqlite`) — tabela meczów, events, teams, standings.
+
+2. Budowa podstawowego datasetu (feature engineering)
+	- Endpoint `POST /build-dataset` lub metoda `ApiSportsHockey.build_dataset()` czyta rekordy z SQLite,
+	  wykonuje feature engineering (H2H, forma, normalizacje, targety) i zapisuje wynik do Parquet (np. `out.parquet`).
+
+3. Augmentacja syntetyczna
+	- Opcjonalnie (zintegrowane w `app/main.py`): dla każdego rekordu bazowego można wygenerować warianty syntetyczne
+	  przy użyciu generatora (`app/generator_synthetic_data.py`).
+	- Strategia: zachowujemy oryginalny rekord i dopisujemy wygenerowane warianty, zapisując ostateczny dataset do Parquet.
+	- Uwaga: eksplozja liczby wierszy — dla dużych datasetów używaj próbkowania lub strumieniowania/partycjonowania.
+
+4. Przechowywanie datasetu
+	- Finalny Parquet jest źródłem dla eksperymentów i treningu modeli (`nhl_YYYY.parquet` lub `out.parquet`).
+
+5. Trening modelu
+	- Skrypt `app/example.py` pokazuje jak przygotować tensory (TensorFlow / PyTorch) z Parquet,
+	  wykonać krótki trening i zapisać model do `models/`.
+	- TensorFlow: zapis Keras (`models/tf_demo_model/`).
+	- PyTorch: zapis wag (`models/torch_demo_model.pt`).
+
+6. Użycie modelu w produkcji / innym skrypcie
+	- TensorFlow: `tf.keras.models.load_model("models/tf_demo_model")` i `model.predict(X_new)`.
+	- PyTorch: utwórz sieć (np. `build_torch_model`) i załaduj `model.load_state_dict(torch.load(path))`.
+
+Praktyczne wskazówki:
+- Zachowaj spójną listę cech (`FEATURE_COLS`) i stosuj to samo przetwarzanie przy treningu i predykcji.
+- Dla dużych zbiorów danych unikaj ładowania całego Parquet do pamięci — użyj chunków / Dask / strumieniowania.
+- Jeśli używasz augmentacji syntetycznej, kontroluj rozmiar wyjściowego datasetu (sampling, limit na rekordy).
+
 ## Zmienne środowiskowe
 
 Skopiuj `.env.example` na `.env` i dostosuj wartości:
