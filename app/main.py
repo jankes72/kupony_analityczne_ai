@@ -154,11 +154,10 @@ async def collect_world_data(payload: CollectRequest):
         "sports": {
             "api_key": "API_KEY_HERE",
             "action": "leagues|games|game|games_events|team_statistics",
-            "params": { ... }
-        }
+            "params": {...}  # opcjonalne parametry dla akcji
     }
     """
-    # init wrapper (will raise ValueError when api_key is missing/empty)
+    # init wrapper (wi ... }ll raise ValueError when api_key is missing/empty)
     try:
         from .sport_wrapper import ApiSportsHockey, ApiSportsError
     except Exception:

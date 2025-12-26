@@ -172,3 +172,35 @@ PORT=8000
 ## Licencja
 
 MIT
+
+## Użycie wytrenowanego modelu (szybka ściąga)
+
+Po uruchomieniu `app/example.py` w katalogu `models/` pojawią się przykładowe zapisy modeli:
+
+- TensorFlow: `models/tf_demo_model/` (katalog z zapisanym modelem Keras)
+- PyTorch: `models/torch_demo_model.pt` (pliki wag sieci)
+
+Krótki przykład użycia (TensorFlow):
+
+```python
+import tensorflow as tf
+model = tf.keras.models.load_model("models/tf_demo_model")
+X_new = ...  # numpy array z cechami w tej samej kolejności co FEATURE_COLS
+pred = model.predict(X_new)
+```
+
+Dla PyTorch:
+
+```python
+import torch
+from app.example import build_torch_model
+model = build_torch_model(input_dim=3, n_classes=1)
+model.load_state_dict(torch.load("models/torch_demo_model.pt"))
+model.eval()
+X_new = torch.tensor([[...]], dtype=torch.float32)
+with torch.no_grad():
+	out = model(X_new)
+	prob = torch.sigmoid(out).item()
+```
+
+Uwaga: wejście musi mieć tę samą kolejność i skalowanie cech co podczas treningu. Zapisz `FEATURE_COLS` i używaj go wszędzie.
