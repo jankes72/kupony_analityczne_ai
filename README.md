@@ -2,15 +2,16 @@
 
 ## Opis projektu
 
-Projekt to eksperyment badawczy nad modelami predykcyjnymi dla zdarzeń sportowych zintegrowanymi z
-instalacją danych i API. System łączy:
+Projekt to praktyczny zestaw narzędzi do gromadzenia, transformacji i eksperymentów ML na danych meczowych
+(koncentruje się na hokeju). Repo zawiera pipeline od pobrania surowych danych, przez feature engineering,
+generowanie wariantów syntetycznych, do prostego treningu modeli (TF / PyTorch) i przykładów użycia.
 
-- eksperymenty z różnymi architekturami sieci neuronowych do predykcji wyników,
-- moduł integrujący z zewnętrznym API (API-Sports) do zbierania danych meczowych (`app/sport_wrapper.py`),
-- warstwę przechowywania i transformacji danych (SQLite -> Parquet) oraz narzędzia do feature engineering,
-- serwer HTTP oparty na FastAPI z endpointami do monitoringu, pobierania danych, budowania datasetów i testów.
-
-Całość pozwala na: zasysanie danych, tworzenie feature'ów, budowę datasetów Parquet i szybką ocenę modeli.
+Główne możliwości:
+- integracja z API-Sports przez `app/sport_wrapper.py` — pobieranie meczów, eventów i statystyk oraz zapis do SQLite,
+- budowa datasetów Parquet z gotowymi cechami i targetami (`/build-dataset`),
+- generator danych syntetycznych (`app/generator_synthetic_data.py`) — augmentacja rekordów (zachowuje oryginał + warianty),
+- przykładowe helpery i demo treningu (`app/example.py`) — konwersja DF -> tensory, krótkie trenowanie i zapis modeli,
+- serwer FastAPI (`app/main.py`) z endpointami operacyjnymi i integracją generatora syntetycznego.
 
 ## Charakterystyka
 
@@ -115,7 +116,7 @@ Response (przykład):
 
 ### POST /build-dataset
 
-Request JSON:
+Request JSON (przykład):
 
 ```json
 {
@@ -126,6 +127,11 @@ Request JSON:
 	"return_file": false
 }
 ```
+
+Opis działania:
+- Endpoint buduje podstawowy dataset z rekordów w SQLite (feature engineering, targety),
+- następnie (opcjonalnie/konfigurowalnie) stosuje generator syntetyczny i dopisuje warianty do finalnego Parquet
+  — w wyniku dostajesz oryginalne rekordy + wygenerowane warianty w `output_path`.
 
 Response (przykłady):
 
@@ -140,7 +146,9 @@ Response (przykłady):
 
 - Gdy `return_file` = `true` — endpoint zwraca plik Parquet jako download (`Content-Disposition`).
 
-Uwagi: w przypadku błędów endpointy zwracają odpowiednie kody HTTP i pole `detail` z opisem.
+Uwaga: augmentacja syntetyczna może znacząco zwiększyć rozmiar datasetu — kontroluj parametry/limit.
+
+W przypadku błędów endpointy zwracają odpowiednie kody HTTP i pole `detail` z opisem.
 
 ## Struktura projektu
 
@@ -148,15 +156,18 @@ Uwagi: w przypadku błędów endpointy zwracają odpowiednie kody HTTP i pole `d
 kupony_analityczne_ai/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py              # Główna aplikacja FastAPI (endpointy i modele Pydantic)
-│   ├── sport_wrapper.py     # Wrapper ApiSportsHockey, DB helpers, dataset builder i CLI
-+│   ├── features_helpers.py  # Feature engineering helpers i GameRow dataclass
-+│   └── README.md            # Dokumentacja modułów wewnątrz `app/`
-├── run.py                   # Entry point uruchamiający Uvicorn
-├── requirements.txt         # Zależności
-├── .env.example             # Przykład zmiennych środowiskowych
-├── hockey.sqlite            # (opcjonalnie) przykładowa baza danych SQLite
-└── nhl_2023.parquet         # (opcjonalnie) przykładowy dataset Parquet
+│   ├── main.py                  # Główna aplikacja FastAPI (endpointy i integracja generatora)
+│   ├── sport_wrapper.py         # Wrapper ApiSportsHockey, DB helpers, dataset builder i CLI
+│   ├── generator_synthetic_data.py  # Generator wariantów syntetycznych (hokej)
+│   ├── generator_syntetic_data.py   # (starsza/alternatywna wersja, może być zarchiwizowana)
+│   ├── example.py               # Helpery DF->tensory, krótkie treningi TF/PyTorch i demo
+│   └── features_helpers.py      # Feature engineering helpers i GameRow dataclass
+├── models/                      # miejsce zapisu przykładów wytrenowanych modeli
+├── run.py                       # Entry point uruchamiający Uvicorn
+├── requirements.txt             # Zależności
+├── .env.example                 # Przykład zmiennych środowiskowych
+├── hockey.sqlite                # (opcjonalnie) przykładowa baza danych SQLite
+└── nhl_2023.parquet             # (opcjonalnie) przykładowy dataset Parquet
 ```
 
 ## Dataflow (end-to-end)
