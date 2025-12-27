@@ -72,6 +72,7 @@ class BuildDatasetRequest(BaseModel):
     db_path: Optional[str] = None
     output_path: Optional[str] = None
     return_file: bool = False  # jak True -> zwróci plik Parquet
+    max_synthetic_per_record: int = 10  # maksymalna ilość syntetycznych wariantów na 1 oryginalny rekord
 
 
 @app.get("/")
@@ -309,6 +310,8 @@ async def build_dataset(payload: BuildDatasetRequest):
             base = _to_base_record(rec)
             gen = SyntheticMatchGeneratorV2(base)
             synths = gen.generate()
+            # ograniczamy ilość syntetycznych danych do max_synthetic_per_record
+            synths = synths[:payload.max_synthetic_per_record]
             augmented.extend(synths)
 
         out_df = pd.DataFrame(augmented)

@@ -65,6 +65,7 @@ class KuponyAIClient:
         output_path: str,
         return_file: bool = False,
         download_to: str | None = None,
+        max_synthetic_per_record: int = 10,
     ):
         payload = {
             "league": league,
@@ -72,6 +73,7 @@ class KuponyAIClient:
             "db_path": db_path,
             "output_path": output_path,
             "return_file": return_file,
+            "max_synthetic_per_record": max_synthetic_per_record,
         }
 
         # Jeśli return_file = True, API może zwrócić binarny plik parquet
@@ -129,6 +131,7 @@ def main():
     b.add_argument("--output-path", default="./out.parquet")
     b.add_argument("--return-file", action="store_true", help="jeśli ustawisz, API zwróci plik (download)")
     b.add_argument("--download-to", default=None, help="gdzie zapisać pobrany plik, gdy --return-file")
+    b.add_argument("--max-synthetic-per-record", type=int, default=10, help="maksymalna ilość syntetycznych wariantów na 1 rekord (default: 10)")
 
     c = sub.add_parser("collect")
     c.add_argument("--api-key", default=os.getenv("API_SPORTS_KEY"), required=False)
@@ -161,6 +164,7 @@ def main():
                 output_path=args.output_path,
                 return_file=args.return_file,
                 download_to=args.download_to,
+                max_synthetic_per_record=args.max_synthetic_per_record,
             )
             print(_pretty(out))
         elif args.cmd == "collect":

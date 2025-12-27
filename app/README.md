@@ -14,10 +14,12 @@ przyspieszyć orientację w kodzie — szybko znaleźć punkty wejścia (np. API
     - `GET /settings` — zwraca statyczne ustawienia (model `Settings`).
     - `POST /collect-world-data` — przyjmuje payload z kontraktem `CollectRequest` i wywołuje wrapper `ApiSportsHockey`.
     - `POST /fetch-and-store-season` — pobiera sezon przez wrapper i zapisuje do SQLite.
-    - `POST /build-dataset` — buduje Parquet z DB i opcjonalnie zwraca plik.
+    - `POST /build-dataset` — buduje Parquet z DB, integruje generator syntetyczny i opcjonalnie zwraca plik.
+      - Parametr `max_synthetic_per_record` (int, domyślnie 10) — limit wariantów syntetycznych na rekord.
   - Główne klasy / modele w pliku:
     - `Stats`, `Monitor`, `Settings` — modele Pydantic odpowiedzi.
     - `SportsContract`, `CollectRequest`, `FetchSeasonRequest`, `BuildDatasetRequest` — modele wejściowe.
+      - `BuildDatasetRequest` zawiera teraz `max_synthetic_per_record: int = 10` do kontroli wielkości datasetu.
   - Przykład użycia (lokalny): uruchom serwer przez `python run.py`, potem wywołaj endpointy lub sprawdź `/docs`.
 
 - `app/sport_wrapper.py` — wrapper do API-Sports (Hockey) i narzędzia do DB / datasetów:
@@ -92,6 +94,23 @@ python -m app.sport_wrapper --fetch --league 57 --season 2024 --db ./hockey.sqli
 
 ```bash
 python -m app.sport_wrapper --dataset --league 57 --season 2024 --db ./hockey.sqlite --out ./nhl_2024.parquet
+```
+
+## Dodatkowe moduły (nowe)
+
+- `app/generator_synthetic_data.py` — klasa `SyntheticMatchGeneratorV2` generująca warianty syntetyczne meczów hokejowych.
+  - Użycie: włączone w `/build-dataset` endpoint — dla każdego rekordu bazowego tworzy kombinacje zaburzeń (soft features).
+  - Parametr kontrolujący: `max_synthetic_per_record` w payload'u — ogranicza ilość wariantów do zbudowania.
+
+- `app/example.py` — helpery do feature engineering, przygotowania tensorów (TensorFlow/PyTorch) i demo treningu modeli.
+
+- `client.py` — klient HTTP do testowania API lokalnie, zawiera CLI z subcommandami:
+  - `build-dataset` — zawiera argument `--max-synthetic-per-record` (domyślnie 10).
+
+Przykład CLI z limitowaniem:
+
+```bash
+python client.py build-dataset --league 57 --season 2024 --db-path ./hockey.sqlite --max-synthetic-per-record 5
 ```
 
 ---

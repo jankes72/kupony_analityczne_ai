@@ -161,7 +161,8 @@ kupony_analityczne_ai/
 │   ├── generator_synthetic_data.py  # Generator wariantów syntetycznych (hokej)
 │   ├── generator_syntetic_data.py   # (starsza/alternatywna wersja, może być zarchiwizowana)
 │   ├── example.py               # Helpery DF->tensory, krótkie treningi TF/PyTorch i demo
-│   └── features_helpers.py      # Feature engineering helpers i GameRow dataclass
+│   ├── features_helpers.py      # Feature engineering helpers i GameRow dataclass
+│   └── README.md                # Dokumentacja modułów wewnątrz `app/`
 ├── models/                      # miejsce zapisu przykładów wytrenowanych modeli
 ├── run.py                       # Entry point uruchamiający Uvicorn
 ├── requirements.txt             # Zależności
